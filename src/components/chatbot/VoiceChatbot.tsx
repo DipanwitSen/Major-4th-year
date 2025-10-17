@@ -9,7 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 interface Message {
   role: "user" | "assistant";
   content: string;
-  hasAudio?: boolean;
 }
 
 const VoiceChatbot = () => {
@@ -20,6 +19,7 @@ const VoiceChatbot = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const recognitionRef = useRef<any>(null);
   const synthesisRef = useRef<SpeechSynthesis | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Initialize Speech Recognition
@@ -60,6 +60,10 @@ const VoiceChatbot = () => {
     };
   }, []);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
   const toggleListening = () => {
     if (!recognitionRef.current) {
       toast.error('Speech recognition not supported in this browser');
@@ -72,7 +76,7 @@ const VoiceChatbot = () => {
     } else {
       recognitionRef.current.start();
       setIsListening(true);
-      toast.info('Listening... Speak now!');
+      toast.info('🎤 Listening... Speak now!');
     }
   };
 
@@ -108,7 +112,7 @@ const VoiceChatbot = () => {
 
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || input.trim();
-    if (!textToSend) return;
+    if (!textToSend || isProcessing) return;
 
     const userMessage: Message = { role: "user", content: textToSend };
     setMessages(prev => [...prev, userMessage]);
@@ -116,31 +120,82 @@ const VoiceChatbot = () => {
     setIsProcessing(true);
 
     try {
-      // Here you would call your AI backend
-      // For now, we'll use a simple echo response
-      const response = `I heard you say: "${textToSend}". This is a demo response from Lovable AI chatbot! 🤖`;
-      
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: response,
-        hasAudio: true,
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      // Automatically speak the response
-      speakText(response);
-
-      // Save to database
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('chat_messages').insert([
-          { user_id: user.id, role: 'user', content: textToSend },
-          { user_id: user.id, role: 'assistant', content: response, has_audio: true }
-        ]);
+      if (!user) {
+        toast.error('Please login to use the chatbot');
+        return;
       }
+
+      // Stream response from AI
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map(m => ({
+            role: m.role,
+            content: m.content
+          }))
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to get response');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantMessage = "";
+
+      setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                assistantMessage += content;
+                setMessages(prev => {
+                  const newMessages = [...prev];
+                  newMessages[newMessages.length - 1] = {
+                    role: "assistant",
+                    content: assistantMessage
+                  };
+                  return newMessages;
+                });
+              }
+            } catch (e) {
+              // Ignore parse errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+      // Save messages to database
+      await supabase.from('chat_messages').insert([
+        { user_id: user.id, role: 'user', content: textToSend },
+        { user_id: user.id, role: 'assistant', content: assistantMessage, has_audio: true }
+      ]);
+
+      // Automatically speak the response
+      speakText(assistantMessage);
     } catch (error) {
+      console.error('Chat error:', error);
       toast.error('Failed to process message');
+      setMessages(prev => prev.slice(0, -1)); // Remove empty assistant message
     } finally {
       setIsProcessing(false);
     }
@@ -158,7 +213,7 @@ const VoiceChatbot = () => {
         {messages.map((message, index) => (
           <Card
             key={index}
-            className={`p-4 ${
+            className={`p-4 animate-fade-in ${
               message.role === "user"
                 ? "ml-12 bg-primary/10 border-primary/20"
                 : "mr-12 bg-secondary/10 border-secondary/20"
@@ -167,11 +222,11 @@ const VoiceChatbot = () => {
             <div className="flex items-start gap-3">
               <div className="flex-1">
                 <p className="text-sm font-medium mb-1">
-                  {message.role === "user" ? "You" : "Lovable AI"}
+                  {message.role === "user" ? "You" : "Lovable AI 🤖"}
                 </p>
-                <p className="text-foreground">{message.content}</p>
+                <p className="text-foreground whitespace-pre-wrap">{message.content}</p>
               </div>
-              {message.role === "assistant" && message.hasAudio && (
+              {message.role === "assistant" && message.content && (
                 <Button
                   size="icon"
                   variant="ghost"
@@ -185,12 +240,13 @@ const VoiceChatbot = () => {
           </Card>
         ))}
         {isProcessing && (
-          <Card className="mr-12 p-4 bg-secondary/10 border-secondary/20">
+          <Card className="mr-12 p-4 bg-secondary/10 border-secondary/20 animate-pulse">
             <div className="flex items-center gap-2">
-              <div className="animate-pulse">Lovable is thinking...</div>
+              <div>Lovable is thinking...</div>
             </div>
           </Card>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="glass-card rounded-2xl p-4">
@@ -207,7 +263,7 @@ const VoiceChatbot = () => {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+            onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
             placeholder="Type your message or use voice..."
             disabled={isProcessing || isListening}
             className="flex-1 bg-background/50"

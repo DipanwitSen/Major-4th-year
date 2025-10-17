@@ -3,11 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import DashboardNav from "@/components/dashboard/DashboardNav";
 import VoiceChatbot from "@/components/chatbot/VoiceChatbot";
+import Summarizer from "@/components/features/Summarizer";
+import Translator from "@/components/features/Translator";
+import Calendar from "@/components/features/Calendar";
+import GraphGenerator from "@/components/features/GraphGenerator";
+import Notifications from "@/components/features/Notifications";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Languages, Calendar, BarChart3, Bell, MessageCircle, Upload } from "lucide-react";
-import { toast } from "sonner";
+import { FileText, Languages, Calendar as CalendarIcon, BarChart3, Bell, MessageCircle, Upload } from "lucide-react";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -57,14 +61,6 @@ const Dashboard = () => {
 
   const isManager = profile?.role === 'manager';
 
-  const features = [
-    { icon: FileText, label: "Summarizer", color: "text-primary" },
-    { icon: Languages, label: "Translator", color: "text-secondary" },
-    { icon: Calendar, label: "Calendar", color: "text-accent" },
-    { icon: BarChart3, label: "Graph Generator", color: "text-primary" },
-    { icon: Bell, label: "Notifications", color: "text-secondary" },
-  ];
-
   return (
     <div className="min-h-screen p-6 relative overflow-hidden">
       {/* Background decoration */}
@@ -77,19 +73,35 @@ const Dashboard = () => {
         <DashboardNav userName={profile?.full_name || user?.email} userRole={isManager ? 'Manager' : 'Customer'} />
 
         <Tabs defaultValue="chatbot" className="space-y-6">
-          <TabsList className="glass-card p-1">
+          <TabsList className="glass-card p-1 grid grid-cols-3 md:grid-cols-7 gap-1">
             <TabsTrigger value="chatbot" className="data-[state=active]:bg-primary/20">
-              <MessageCircle size={18} className="mr-2" />
-              Lovable Chatbot
+              <MessageCircle size={18} className="md:mr-2" />
+              <span className="hidden md:inline">Chat</span>
             </TabsTrigger>
-            <TabsTrigger value="features" className="data-[state=active]:bg-primary/20">
-              <FileText size={18} className="mr-2" />
-              Features
+            <TabsTrigger value="summarizer" className="data-[state=active]:bg-primary/20">
+              <FileText size={18} className="md:mr-2" />
+              <span className="hidden md:inline">Summarize</span>
+            </TabsTrigger>
+            <TabsTrigger value="translator" className="data-[state=active]:bg-primary/20">
+              <Languages size={18} className="md:mr-2" />
+              <span className="hidden md:inline">Translate</span>
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="data-[state=active]:bg-primary/20">
+              <CalendarIcon size={18} className="md:mr-2" />
+              <span className="hidden md:inline">Calendar</span>
+            </TabsTrigger>
+            <TabsTrigger value="graphs" className="data-[state=active]:bg-primary/20">
+              <BarChart3 size={18} className="md:mr-2" />
+              <span className="hidden md:inline">Graphs</span>
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="data-[state=active]:bg-primary/20">
+              <Bell size={18} className="md:mr-2" />
+              <span className="hidden md:inline">Alerts</span>
             </TabsTrigger>
             {isManager && (
               <TabsTrigger value="manage" className="data-[state=active]:bg-primary/20">
-                <Upload size={18} className="mr-2" />
-                Manage
+                <Upload size={18} className="md:mr-2" />
+                <span className="hidden md:inline">Manage</span>
               </TabsTrigger>
             )}
           </TabsList>
@@ -106,28 +118,24 @@ const Dashboard = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="features" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {features.map((feature, index) => (
-                <Card
-                  key={index}
-                  className="glass-card p-6 hover:shadow-lg transition-all cursor-pointer group"
-                  onClick={() => toast.info(`${feature.label} coming soon!`)}
-                >
-                  <div className={`${feature.color} mb-4 group-hover:scale-110 transition-transform`}>
-                    <feature.icon size={40} />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-2">{feature.label}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {feature.label === "Summarizer" && "Upload PDFs and get AI summaries with voice narration"}
-                    {feature.label === "Translator" && "Translate text to Hindi and other languages"}
-                    {feature.label === "Calendar" && "Manage your events and reminders"}
-                    {feature.label === "Graph Generator" && "Auto-generate charts from CSV data"}
-                    {feature.label === "Notifications" && "Stay updated with smart alerts"}
-                  </p>
-                </Card>
-              ))}
-            </div>
+          <TabsContent value="summarizer">
+            <Summarizer />
+          </TabsContent>
+
+          <TabsContent value="translator">
+            <Translator />
+          </TabsContent>
+
+          <TabsContent value="calendar">
+            <Calendar />
+          </TabsContent>
+
+          <TabsContent value="graphs">
+            <GraphGenerator />
+          </TabsContent>
+
+          <TabsContent value="notifications">
+            <Notifications />
           </TabsContent>
 
           {isManager && (
@@ -138,9 +146,9 @@ const Dashboard = () => {
                 </h2>
                 <div className="space-y-6">
                   <div className="glass-card p-6 rounded-xl">
-                    <h3 className="text-xl font-semibold mb-3">Upload Files</h3>
+                    <h3 className="text-xl font-semibold mb-3">Upload & Manage Files</h3>
                     <p className="text-muted-foreground mb-4">
-                      Upload PDFs, CSVs, and documents to process and share with customers
+                      Upload PDFs, CSVs, and documents. Get summaries, translations, and voice narrations.
                     </p>
                     <Button className="bg-gradient-to-r from-primary to-primary-glow">
                       <Upload size={18} className="mr-2" />
@@ -150,16 +158,22 @@ const Dashboard = () => {
 
                   <div className="glass-card p-6 rounded-xl">
                     <h3 className="text-xl font-semibold mb-3">Customer Management</h3>
-                    <p className="text-muted-foreground">
-                      View and manage customer accounts and access
+                    <p className="text-muted-foreground mb-4">
+                      View customer accounts, manage access, and track usage
                     </p>
+                    <div className="text-sm text-muted-foreground">
+                      Feature coming soon: Full customer dashboard
+                    </div>
                   </div>
 
                   <div className="glass-card p-6 rounded-xl">
                     <h3 className="text-xl font-semibold mb-3">Download Center</h3>
-                    <p className="text-muted-foreground">
+                    <p className="text-muted-foreground mb-4">
                       Access all original files, summaries, graphs, and audio files
                     </p>
+                    <div className="text-sm text-muted-foreground">
+                      All processed files available for download
+                    </div>
                   </div>
                 </div>
               </Card>
